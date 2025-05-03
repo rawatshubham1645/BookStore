@@ -1,0 +1,53 @@
+name: Deploy to S3
+
+on:
+  push:
+    branches:
+      - main # Trigger on push to the main branch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up JDK 17 (required for Maven)
+        uses: actions/setup-java@v2
+        with:
+          java-version: '17'  # Use Java 17 as per your setup
+          distribution: 'adoptopenjdk'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Set up Docker Compose
+        uses: docker/setup-qemu-action@v1
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v2
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Build Maven project
+        run: mvn clean package -DskipTests
+
+      - name: Build Docker container using Docker Compose
+        run: docker-compose -f docker-compose.yml build
+
+      # Remove the ECR login step if you're not using ECR.
+      # If you're deploying to AWS ECR, you can keep the next two lines.
+      # - name: Log in to Amazon ECR
+      #   uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Upload .jar file to S3
+        run: |
+          aws s3 cp target/BookStore-0.0.1-SNAPSHOT.jar s3://bookstore-artifacts/ --region ap-south-1
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ap-south-1
